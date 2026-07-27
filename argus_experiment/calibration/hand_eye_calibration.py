@@ -22,7 +22,7 @@ printed on its side).
 
 Usage:
     python argus_experiment/calibration/hand_eye_calibration.py \
-        --channel can0 --device /dev/video0 \
+        --channel can0 --device /dev/video1 \
         --cols 10 --rows 7 --square 0.036
 """
 
@@ -215,7 +215,7 @@ def run(args) -> None:
     for name, m in methods.items():
         R_x, t_x = cv2.calibrateHandEye(R_g2b, t_g2b, R_t2c, t_t2c, method=m)
         results[name] = make_SE3(R_x, t_x)
-        rpy = cv2.RQDecomp3x3(R_x)[0] 
+        rpy = np.array(cv2.RQDecomp3x3(R_x)[0])
         print(f"  {name:11s} t={t_x.ravel().round(4)}  rpy_deg={rpy.round(2)}")
 
     # Primary = PARK (jointly solves R,t; robust general choice).

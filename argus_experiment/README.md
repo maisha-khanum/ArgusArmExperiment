@@ -1,6 +1,10 @@
 Instructions for running the robot arm trajectories.
 
 ## Setup
+```bash
+conda activate yam_arms
+```
+
 Make sure the arm is powered on (power brick light is lit and E-stop is open)!
 
 Bring up the CAN interface before running any arm commands:

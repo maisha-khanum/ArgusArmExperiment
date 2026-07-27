@@ -9,3 +9,9 @@ debug.png
 
 argus_experiment/trajectories/recordings/traj_*/
 !argus_experiment/trajectories/recordings/.gitkeep
+
+# hand-eye calibration capture images (regenerated each calibration run)
+argus_experiment/calibration/handeye_captures/*.png
+
+# trajectory recordings (data, not code)
+argus_experiment/trajectories/recordings/
