@@ -2,8 +2,11 @@
 #
 # Run a queue of EE trajectories on the YAM arm.
 #
+# All motion runs in the link_6 CAMERA frame (camera_site, injected from the
+# hand-eye result) — roll/pitch/yaw rotate about the camera's own axes.
+#
 # First argument is the trial name, used to title the output data folder
-# (recordings/<trial_name>_<timestamp>/).
+# (recordings/<trial_name>_cam/).
 #
 # Edit the --traj lines below to set up the queue. Each is:
 #     --traj WAVE:MOTION:AXIS:SPEED
@@ -37,9 +40,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 
 python "$SCRIPT_DIR/run_trajectories.py" "$TRIAL_NAME" \
-    --traj sawtooth:angular:roll:0.2 \
-    --traj sawtooth:angular:pitch:0.2 \
     --traj sawtooth:angular:yaw:0.2 \
+    --traj sawtooth:angular:pitch:0.2 \
+    --traj sawtooth:angular:roll:0.2 \
     "$@"
 
 # python "$SCRIPT_DIR/run_trajectories.py" "$TRIAL_NAME" \

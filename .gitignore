@@ -15,3 +15,11 @@ argus_experiment/calibration/handeye_captures/*.png
 
 # trajectory recordings (data, not code)
 argus_experiment/trajectories/recordings/
+
+# external VIO repo (cloned separately; see argus_repo/insert_argus_vio.txt)
+# and its colcon build workspace — not tracked in this project.
+data_processing/argus_repo/Argus_LightVIO/
+data_processing/argus_repo/ws/
+
+# processing data (bags, c3d, npz outputs) — not code
+data_processing/data/

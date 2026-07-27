@@ -9,6 +9,11 @@ arm runs the full cycle:
 
 then holds briefly at home before starting the next command's cycle.
 
+All motion is executed in the link_6 CAMERA frame: camera_site is injected
+from the hand-eye result (--handeye) and used for both FK (trajectory center)
+and IK (targeting) — angular axes (roll/pitch/yaw) rotate about the camera's
+own axes, not the gripper's.
+
 Generalizes ee_linear_sinusoidal / ee_linear_sawtooth / ee_rot_sinusoidal /
 ee_rot_sawtooth. Arm is fixed to yam on channel can0. The queue is passed on
 the command line via repeated --traj WAVE:MOTION:AXIS:SPEED tokens. A trial
@@ -39,7 +44,7 @@ _REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(_REPO / "robots_realtime" / "dependencies" / "i2rt"))
 sys.path.insert(0, str(_REPO / "argus_experiment" / "calibration"))
 
-from camera_frame import load_handeye
+from camera_frame import add_camera_site, load_handeye
 from i2rt.robots.get_robot import get_yam_robot
 from i2rt.robots.kinematics import Kinematics
 from i2rt.robots.utils import ArmType, GripperType
@@ -161,7 +166,10 @@ class Recorder:
         obs = self._robot.get_observations()
         q = np.asarray(obs["joint_pos"], dtype=float)[:N_ARM]
         qd = np.asarray(obs["joint_vel"], dtype=float)[:N_ARM]
-        T_cam = self._kin.fk(q) @ self._X
+        # X = T_ee_cam is defined relative to grasp_site (what hand-eye calibration used
+        # for FK), so always resolve grasp_site here regardless of kin's default site
+        # (which may be camera_site when --camera drives the actual trajectory).
+        T_cam = self._kin.fk(q, "grasp_site") @ self._X
         self.t.append(time.time() - self._t0)
         self.q.append(q)
         self.qdot.append(qd)
@@ -202,6 +210,7 @@ def write_description(txt_path, queue, args, npz_name: str) -> None:
         f"Trial name  : {args.trial_name}",
         f"Timestamp   : {datetime.now():%Y-%m-%d %H:%M:%S}",
         f"Mode        : {'sim' if args.sim else 'hardware'} (arm=yam, channel=can0)",
+        "Frame       : camera (camera_site, injected from hand-eye result)",
         f"Periods     : {args.periods}",
         f"Control dt  : {args.dt} s",
         f"Hand-eye    : {args.handeye}",
@@ -382,7 +391,7 @@ def run_command(robot, kin, ee_site, cmd: TrajectoryCommand, n_periods: int, dt:
 
     q0 = move_to_qpos(robot, TRAJ_START_QPOS, dt, viewer=viewer, label="trajectory start",
                       recorder=recorder, traj_idx=traj_idx, phase="to_start")
-    center_pose = kin.fk(q0[:N_ARM])
+    center_pose = kin.fk(q0[:N_ARM], ee_site)
     init_q = q0[:N_ARM].copy()
 
     if cmd.motion == "linear":
@@ -483,21 +492,23 @@ def main() -> None:
                         help="Trajectory command, e.g. sinusoidal:linear:x:0.5 . Repeatable; "
                              "runs in the order given.")
     parser.add_argument("--handeye", default=str(DEFAULT_HANDEYE),
-                        help="hand_eye_result.yaml for the recorded camera pose")
+                        help="hand_eye_result.yaml for the camera transform")
     parser.add_argument("trial_name", help="Trial name; titles the output data folder")
     parser.add_argument("--out", default=None,
                         help="Output directory for this run's data + description.txt "
                              "(overrides the trial-name/timestamp default)")
     args = parser.parse_args()
 
-    # Camera transform X = T_ee_cam for the recorded camera pose. If unavailable,
-    # fall back to identity so cam_pos/cam_quat equal the grasp_site pose.
+    # X = T_ee_cam drives BOTH the executed trajectory frame (camera_site, injected
+    # below) and the Recorder's logged camera pose. If unavailable, fall back to
+    # identity (camera_site == grasp_site) rather than crashing, but warn loudly
+    # since this silently changes what frame the arm actually moves in.
     try:
         X = load_handeye(args.handeye)
-        print(f"Recording camera pose via hand-eye {args.handeye}")
+        print(f"Running trajectories in CAMERA frame (hand-eye: {args.handeye})")
     except (FileNotFoundError, KeyError) as e:
         X = np.eye(4)
-        print(f"WARNING: could not load hand-eye ({e}); recording grasp_site pose as camera.")
+        print(f"WARNING: could not load hand-eye ({e}); camera_site will equal grasp_site.")
 
     robot = get_yam_robot(
         channel="can0",
@@ -506,7 +517,9 @@ def main() -> None:
         sim=args.sim,
         ee_mass=ARGUS_MASS,
     )
-    kin = Kinematics(robot.xml_path, "grasp_site")
+    xml_path = add_camera_site(robot.xml_path, X)
+    site = "camera_site"
+    kin = Kinematics(xml_path, site)
     time.sleep(0.5)
 
     recorder = Recorder(robot, kin, X)
@@ -516,7 +529,7 @@ def main() -> None:
         print(f"Running {len(args.queue)} queued trajectories ...")
         for i, cmd in enumerate(args.queue):
             print(f"\n--- Queue item {i + 1}/{len(args.queue)} ---")
-            run_command(robot, kin, "grasp_site", cmd, args.periods, args.dt,
+            run_command(robot, kin, site, cmd, args.periods, args.dt,
                         viewer=viewer, recorder=recorder, traj_idx=i)
         print("\nQueue complete.")
 
@@ -529,7 +542,7 @@ def main() -> None:
         if args.out is not None:
             out_dir = Path(args.out)
         else:
-            out_dir = DEFAULT_OUT_DIR / f"{sanitize_trial_name(args.trial_name)}_{datetime.now():%Y%m%d_%H%M%S}"
+            out_dir = DEFAULT_OUT_DIR / f"{sanitize_trial_name(args.trial_name)}_cam"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         npz_path = out_dir / "trajectory_data.npz"
