@@ -96,7 +96,7 @@ TRAJ_START_QPOS = np.array([
 ])
 
 LINEAR_AMPLITUDE  = 0.1       # m   — half peak-to-peak (matches ee_linear_*)
-ANGULAR_AMPLITUDE = 0.5236    # rad — peak excursion ~30 deg (matches ee_rot_*)
+ANGULAR_AMPLITUDE = 0.5236/3 #TODO    # rad — peak excursion ~30 deg (matches ee_rot_*)
 
 N_PERIODS       = 2
 START_TOL       = 0.05        # rad
